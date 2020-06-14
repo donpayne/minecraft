@@ -1,42 +1,58 @@
-FROM debian:stretch
+FROM alpine:3.11
 
-ENV VERSION 1.15.2
-ENV BUILD 350
-ENV MINECRAFT minecraft_server.${VERSION}.jar
+# Java Version and other ENV
+ENV JAVA_VERSION_MAJOR=8 \
+    JAVA_VERSION_MINOR=112 \
+    JAVA_VERSION_BUILD=15 \
+    JAVA_PACKAGE=server-jre \
+    JAVA_HOME=/opt/jdk \
+    PATH=${PATH}:/opt/jdk/bin \
+    LANG=C.UTF-8
 
-RUN apt update && apt install -y default-jre ca-certificates-java curl \
-    # && curl -sL https://launcher.mojang.com/v1/objects/bb2b6b1aefcd70dfd1892149ac3a215f6c636b07/server.jar -o /${MINECRAFT}
-    && curl -sL https://papermc.io/api/v1/paper/${VERSION}/${BUILD}/download/paper-${BUILD}.jar -o /${MINECRAFT}
+# Install dependencies
+RUN apk upgrade --update && \
+    apk add --update wget curl ca-certificates openssl bash git screen util-linux sudo shadow nss && \
+    update-ca-certificates
 
-WORKDIR /data
-VOLUME /data
+# Install Java8
+RUN apk add openjdk8-jre
 
-# Automatically accept Minecraft EULA
-RUN echo eula=true > /data/eula.txt
+ENV APP_NAME=server
+#default directory for SPIGOT-server
+ENV SPIGOT_HOME /minecraft
+ENV RUN_DIR /minecraft_run
 
-# Expose the container's network port: 25565 during runtime.
+RUN addgroup -g 1000 -S minecraft && \
+    adduser -u 1000 -S minecraft -G minecraft -h /minecraft
+
+RUN echo "minecraft ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/minecraft
+
+RUN mkdir $RUN_DIR
+RUN chown minecraft:minecraft $RUN_DIR
+
+ADD ./minecraft/ops.txt /usr/local/etc/minecraft/ops.txt
+ADD ./minecraft/white-list.txt /usr/local/etc/minecraft/white-list.txt
+ADD ./minecraft/server.properties /usr/local/etc/minecraft/server.properties
+ADD ./lib/scripts/spigot_init.sh /spigot_init.sh
+ADD ./lib/scripts/spigot_run.sh /spigot_run.sh
+ADD ./lib/scripts/spigot_cmd.sh /spigot_cmd.sh
+
+RUN chmod +x /spigot_init.sh
+RUN chmod +x /spigot_run.sh
+RUN chmod +x /spigot_cmd.sh
+
 EXPOSE 25565
+EXPOSE 8123
+VOLUME ["/minecraft"]
 
-# Start Minecraft server
-CMD java -Xms10G -Xmx10G \
-    -XX:+UseG1GC \
-    -XX:+ParallelRefProcEnabled \
-    -XX:MaxGCPauseMillis=200 \
-    -XX:+UnlockExperimentalVMOptions \
-    -XX:+DisableExplicitGC \
-    -XX:+AlwaysPreTouch \
-    -XX:G1NewSizePercent=30 \
-    -XX:G1MaxNewSizePercent=40 \
-    -XX:G1HeapRegionSize=8M \
-    -XX:G1ReservePercent=20 \
-    -XX:G1HeapWastePercent=5 \
-    -XX:G1MixedGCCountTarget=4 \
-    -XX:InitiatingHeapOccupancyPercent=15 \
-    -XX:G1MixedGCLiveThresholdPercent=90 \
-    -XX:G1RSetUpdatingPauseTimePercent=5 \
-    -XX:SurvivorRatio=32 \
-    -XX:+PerfDisableSharedMem \
-    -XX:MaxTenuringThreshold=1 \
-    -Dusing.aikars.flags=https://mcflags.emc.gs \
-    -Daikars.new.flags=true \
-    -jar /${MINECRAFT} nogui
+ENV UID=1000
+ENV GUID=1000
+
+ENV MOTD A Minecraft Server Powered by Spigot & Docker
+ENV REV latest
+ENV JVM_OPTS -Xmx10G -Xms10G
+
+#ENV DYNMAP=true ESSENTIALS=false ESSENTIALSPROTECT=false PERMISSIONSEX=false CLEARLAG=false
+
+#set default command
+CMD trap 'exit' INT; /spigot_init.sh
