@@ -5,7 +5,7 @@
 ## Build Command
 
 ```bash
-docker build -t donpayne/minecraft:1.15.2 -t donpayne/minecraft:latest . && \
-docker push donpayne/minecraft:1.15.2 && \
+docker build -t donpayne/minecraft:1.16.1 -t donpayne/minecraft:latest . && \
+docker push donpayne/minecraft:1.16.1 && \
 docker push donpayne/minecraft:latest
 ```
